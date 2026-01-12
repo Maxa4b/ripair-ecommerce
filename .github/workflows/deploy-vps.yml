@@ -77,6 +77,20 @@ jobs:
           php artisan queue:restart || true
 
           echo "[ecommerce] npm build"
+          echo "[ecommerce] ensure writable public/build"
+          if sudo -n true 2>/dev/null; then
+            ME="$(whoami)"
+            TARGET_GROUP="www-data"
+            if ! getent group "$TARGET_GROUP" >/dev/null 2>&1; then
+              TARGET_GROUP="$ME"
+            fi
+            sudo mkdir -p public
+            sudo chown -R "$ME":"$TARGET_GROUP" public
+            sudo chmod -R ug+rwX public
+            sudo rm -rf public/build
+          else
+            echo "[ecommerce] WARN: sudo not available; build cleanup may fail if permissions are too strict."
+          fi
           command -v npm >/dev/null 2>&1 || { echo "[ecommerce] ERROR: npm missing" >&2; exit 1; }
           npm ci
           npm run build
