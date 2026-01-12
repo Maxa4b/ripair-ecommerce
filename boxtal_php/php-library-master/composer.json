@@ -1,0 +1,21 @@
+{
+    "name": "boxtale/php-library",
+    "type": "library",
+    "description": "Boxtal PHP Library for Boxtal v1 API",
+    "homepage": "https://github.com/boxtal/php-library",
+    "license": "Unlicense",
+    "minimum-stability": "dev",
+    "keywords": ["envoimoinscher", "boxtal", "php", "emc", "class", "api", "library"],
+    "authors": [
+        {
+            "name": "Boxtal Support",
+            "email": "api@boxtal.com"
+        }
+    ],
+    "require": {
+        "php": ">=5.3.0"
+    },
+    "autoload": {
+        "files": ["config/autoload.php"]
+    }
+}

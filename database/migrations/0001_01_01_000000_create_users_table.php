@@ -13,11 +13,24 @@ return new class extends Migration
     {
         Schema::create('users', function (Blueprint $table) {
             $table->id();
-            $table->string('name');
+            $table->string('first_name');
+            $table->string('last_name');
             $table->string('email')->unique();
+            $table->string('phone')->nullable();
+            $table->enum('account_type', ['standard', 'pro'])->default('standard');
+            $table->enum('pro_status', ['none', 'pending', 'approved', 'rejected'])->default('none');
+            $table->string('company_name')->nullable();
+            $table->string('siret')->nullable();
+            $table->string('vat_number')->nullable();
+            $table->string('website')->nullable();
+            $table->decimal('pro_discount_rate', 5, 2)->default(0);
+            $table->boolean('can_access_ht_prices')->default(false);
+            $table->json('preferences')->nullable();
+            $table->timestamp('pro_validated_at')->nullable();
             $table->timestamp('email_verified_at')->nullable();
             $table->string('password');
             $table->rememberToken();
+            $table->softDeletes();
             $table->timestamps();
         });
 
