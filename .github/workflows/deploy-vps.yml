@@ -1,0 +1,71 @@
+name: Deploy VPS (Ecommerce)
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch: {}
+
+concurrency:
+  group: ecommerce-deploy
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Setup SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          echo "${{ secrets.VPS_SSH_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          PORT="${{ secrets.VPS_PORT }}"
+          if [ -z "${PORT}" ]; then PORT="22"; fi
+          ssh-keyscan -p "$PORT" -H "${{ secrets.VPS_HOST }}" >> ~/.ssh/known_hosts
+
+      - name: Deploy on VPS
+        shell: bash
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          VPS_PORT: ${{ secrets.VPS_PORT }}
+          ECOMMERCE_DIR: ${{ secrets.VPS_ECOMMERCE_DIR }}
+        run: |
+          set -euo pipefail
+          : "${VPS_HOST:?Missing GitHub secret VPS_HOST}"
+          : "${VPS_USER:?Missing GitHub secret VPS_USER}"
+          PORT="${VPS_PORT:-22}"
+
+          ssh -p "$PORT" "${VPS_USER}@${VPS_HOST}" "ECOMMERCE_DIR='${ECOMMERCE_DIR}' bash -s" <<'EOF'
+          set -euo pipefail
+
+          DIR="${ECOMMERCE_DIR:-$HOME/opt/ripair/site/boutique}"
+          echo "[ecommerce] deploy dir: $DIR"
+
+          cd "$DIR"
+          git remote set-url origin https://github.com/Maxa4b/ripair-ecommerce.git
+          git fetch --prune origin
+          git reset --hard origin/main
+
+          echo "[ecommerce] composer + artisan caches"
+          command -v composer >/dev/null 2>&1 || { echo "[ecommerce] ERROR: composer missing" >&2; exit 1; }
+          composer install --no-interaction --no-dev --prefer-dist --optimize-autoloader
+          php artisan optimize:clear || true
+          php artisan cache:clear || true
+          php artisan config:cache
+          php artisan event:cache || true
+          php artisan route:cache || true
+          php artisan view:cache || true
+          php artisan queue:restart || true
+
+          echo "[ecommerce] npm build"
+          command -v npm >/dev/null 2>&1 || { echo "[ecommerce] ERROR: npm missing" >&2; exit 1; }
+          npm ci
+          npm run build
+
+          echo "[ecommerce] deploy OK"
+EOF
+
