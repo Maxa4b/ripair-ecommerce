@@ -46,6 +46,10 @@ jobs:
           echo "[ecommerce] deploy dir: $DIR"
 
           cd "$DIR"
+          if [ ! -d .git ]; then
+            git init
+            git remote add origin https://github.com/Maxa4b/ripair-ecommerce.git
+          fi
           git remote set-url origin https://github.com/Maxa4b/ripair-ecommerce.git
           git fetch --prune origin
           git reset --hard origin/main
@@ -68,4 +72,3 @@ jobs:
 
           echo "[ecommerce] deploy OK"
 EOF
-
