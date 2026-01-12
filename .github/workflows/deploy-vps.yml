@@ -70,4 +70,4 @@ jobs:
           npm run build
 
           echo "[ecommerce] deploy OK"
-EOF
+          EOF
