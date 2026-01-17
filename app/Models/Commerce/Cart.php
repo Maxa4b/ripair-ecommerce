@@ -47,4 +47,15 @@ class Cart extends Model
     {
         return $this->hasMany(CartItem::class);
     }
+
+    public function forcedShippingFee(): ?float
+    {
+        $items = $this->relationLoaded('items') ? $this->items : $this->items()->get();
+        $fee = $items
+            ->map(fn ($item) => data_get($item->variant_snapshot, 'extra.shipping_fee'))
+            ->filter(fn ($val) => is_numeric($val) && (float) $val > 0)
+            ->max();
+
+        return $fee ? (float) $fee : null;
+    }
 }
