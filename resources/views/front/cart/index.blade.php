@@ -222,6 +222,29 @@
                         $color = data_get($item->variant_snapshot, 'color') ?? $item->variant?->color;
                         $color = is_scalar($color) ? trim((string) $color) : null;
                         $colorLabel = $color;
+                        $optionTags = [];
+                        $optionList = data_get($item->variant_snapshot, 'options', []);
+                        if (is_array($optionList)) {
+                            foreach ($optionList as $opt) {
+                                $label = is_scalar(data_get($opt, 'label')) ? trim((string) data_get($opt, 'label')) : '';
+                                $value = is_scalar(data_get($opt, 'value')) ? trim((string) data_get($opt, 'value')) : '';
+                                $price = is_numeric(data_get($opt, 'price')) ? (float) data_get($opt, 'price') : null;
+                                $textParts = [];
+                                if ($label !== '' && $value !== '') {
+                                    $textParts[] = $label.': '.$value;
+                                } elseif ($label !== '') {
+                                    $textParts[] = $label;
+                                } elseif ($value !== '') {
+                                    $textParts[] = $value;
+                                }
+                                if ($price !== null && $price > 0) {
+                                    $textParts[] = '+'.number_format($price, 2, ',', ' ').' €';
+                                }
+                                if ($textParts) {
+                                    $optionTags[] = implode(' ', $textParts);
+                                }
+                            }
+                        }
                         if ($color) {
                             $colorMap = [
                                 'purple' => 'Violet',
@@ -280,6 +303,13 @@
                                             <span class="cart-tag cart-tag--muted">Révision {{ strtoupper($revision) }}</span>
                                         </div>
                                     @endif
+                                    @if ($optionTags)
+                                        <div class="cart-card__meta">
+                                            @foreach ($optionTags as $tag)
+                                                <span class="cart-tag cart-tag--muted">{{ $tag }}</span>
+                                            @endforeach
+                                        </div>
+                                    @endif
                                 </div>
                                 <div class="cart-card__price">
                                     <div class="price-line">
@@ -329,9 +359,14 @@
             @php
                 $freeShippingMin = config('pricing.free_shipping_min_total');
                 $smallOrderFee = config('pricing.small_order_shipping_fee');
+                $shippingSurcharge = config('pricing.shipping_surcharge', 0);
+                $forcedShipping = $cart->forcedShippingFee();
                 // Eligibilité calculée sur le panier avant remise pour ne pas annuler la livraison offerte
                 $eligibleBase = max(0, $cart->subtotal_ttc);
-                $remainingForFree = $freeShippingMin ? max(0, $freeShippingMin - $eligibleBase) : 0;
+                $allowFreeShipping = $shippingSurcharge <= 0;
+                $remainingForFree = ($allowFreeShipping && ! $forcedShipping)
+                    ? ($freeShippingMin ? max(0, $freeShippingMin - $eligibleBase) : 0)
+                    : 0;
             @endphp
             <div class="summary-rows">
                 <div class="summary-row">
@@ -353,7 +388,7 @@
             </div>
 
             <div class="summary-extra">
-                @if($freeShippingMin)
+                @if($allowFreeShipping && ! $forcedShipping && $freeShippingMin)
                     <p class="summary-badge">
                         @if($remainingForFree > 0)
                             Encore {{ number_format($remainingForFree, 2, ',', ' ') }} € pour la livraison offerte
@@ -404,7 +439,7 @@
             </a>
         </aside>
 
-        @if(($freeShippingMin ?? null) && ! $isCartEmpty)
+        @if($allowFreeShipping && ! $forcedShipping && ($freeShippingMin ?? null) && ! $isCartEmpty)
             <div class="cart-free-sticky">
                 @if($remainingForFree > 0)
                     Encore {{ number_format($remainingForFree, 2, ',', ' ') }} € pour la livraison offerte

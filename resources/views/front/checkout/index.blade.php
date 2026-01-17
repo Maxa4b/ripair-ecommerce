@@ -68,11 +68,18 @@
         @php
             $freeShippingMin = config('pricing.free_shipping_min_total');
             $smallOrderFee = config('pricing.small_order_shipping_fee');
+            $shippingSurcharge = config('pricing.shipping_surcharge', 0);
+            $forcedShipping = $forcedShipping ?? null;
             // Eligibilité calculée sur le panier avant remise pour ne pas annuler la livraison offerte
             $eligibleBase = max(0, $cart->subtotal_ttc);
             $hasShippingPromo = $cart->promoCode && $cart->promoCode->discount_type === 'shipping';
-            $isFreeShippingEligible = $hasShippingPromo || ($freeShippingMin ? $eligibleBase >= $freeShippingMin : false);
-            $remainingForFree = $isFreeShippingEligible ? 0 : ($freeShippingMin ? max(0, $freeShippingMin - $eligibleBase) : 0);
+            $allowFreeShipping = $shippingSurcharge <= 0;
+            $isFreeShippingEligible = $allowFreeShipping
+                && ! $forcedShipping
+                && ($hasShippingPromo || ($freeShippingMin ? $eligibleBase >= $freeShippingMin : false));
+            $remainingForFree = $isFreeShippingEligible
+                ? 0
+                : ($allowFreeShipping && $freeShippingMin ? max(0, $freeShippingMin - $eligibleBase) : 0);
             $selectedShippingId = old('shipping_method', data_get($checkoutData, 'shipping.shipping_method'));
             $selectedShipping = collect($shippingOptions)->firstWhere('method_id', $selectedShippingId);
             $selectedShippingPrice = $selectedShipping['price'] ?? null;
@@ -353,9 +360,9 @@
             <div class="summary-card">
                 <div class="summary-head">
                     <h2>Votre commande</h2>
-                    @if($remainingForFree > 0 && $freeShippingMin)
+                    @if($allowFreeShipping && ! $forcedShipping && $remainingForFree > 0 && $freeShippingMin)
                         <p class="summary-hint summary-hint--left">Encore {{ number_format($remainingForFree, 2, ',', ' ') }} € pour la livraison offerte</p>
-                    @elseif($freeShippingMin)
+                    @elseif($allowFreeShipping && ! $forcedShipping && $freeShippingMin)
                         <p class="summary-hint summary-hint--left">Livraison offerte sur votre panier 🎉</p>
                     @endif
                 </div>
@@ -371,6 +378,30 @@
                                 $legacyRepairModel = $legacy?->model;
                             }
                             $model = $legacyModel ?? $legacyRepairModel;
+                            $optionTags = [];
+                            $optionList = data_get($item->variant_snapshot, 'options', []);
+                            if (is_array($optionList)) {
+                                foreach ($optionList as $opt) {
+                                    $label = is_scalar(data_get($opt, 'label')) ? trim((string) data_get($opt, 'label')) : '';
+                                    if ($label === '' || strcasecmp($label, 'Livraison') === 0) {
+                                        continue;
+                                    }
+                                    $value = is_scalar(data_get($opt, 'value')) ? trim((string) data_get($opt, 'value')) : '';
+                                    $price = is_numeric(data_get($opt, 'price')) ? (float) data_get($opt, 'price') : null;
+                                    $textParts = [];
+                                    if ($value !== '') {
+                                        $textParts[] = $label.': '.$value;
+                                    } else {
+                                        $textParts[] = $label;
+                                    }
+                                    if ($price !== null && $price > 0) {
+                                        $textParts[] = '+'.number_format($price, 2, ',', ' ').' €';
+                                    }
+                                    if ($textParts) {
+                                        $optionTags[] = implode(' ', $textParts);
+                                    }
+                                }
+                            }
                         @endphp
                         <li class="summary-item">
                             <div>
@@ -378,6 +409,9 @@
                                     <span class="muted">{{ trim($brand.' - '.$model, ' -') }}</span>
                                 @endif
                                 <strong>{{ $item->name }}</strong>
+                                @if($optionTags)
+                                    <span class="muted">{{ implode(' - ', $optionTags) }}</span>
+                                @endif
                                 <span class="muted">x{{ $item->quantity }}</span>
                             </div>
                             <span>{{ number_format($item->unit_price_ttc * $item->quantity, 2, ',', ' ') }} €</span>

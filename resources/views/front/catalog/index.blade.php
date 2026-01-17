@@ -21,6 +21,8 @@
         }
         return $carry + (!is_null($value) ? 1 : 0);
     }, 0))
+@php($requestedSort = request('sort', 'relevance'))
+@php($currentSortValue = $requestedSort === 'latest' ? 'relevance' : $requestedSort)
 
 @section('content')
     <style>
@@ -284,6 +286,11 @@
                 display: grid;
                 grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
                 gap: 10px;
+            }
+            .problem-list {
+                max-height: 260px;
+                overflow-y: auto;
+                padding-right: 6px;
             }
 	            .chip-list label.filter-pill,
 	            .problem-list label.filter-pill {
@@ -748,7 +755,7 @@
             </div>
             <h2 class="filter-desktop-title">Affiner la recherche</h2>
             <form method="GET" id="catalogFilterForm" class="filter-form" data-category="{{ $category }}" data-clear-url="{{ url()->current() }}">
-                <input type="hidden" name="sort" value="{{ request('sort', 'latest') }}">
+                <input type="hidden" name="sort" value="{{ $currentSortValue }}">
                 <div class="filter-group">
                     <h4>Recherche</h4>
                     <input type="search" name="q" value="{{ request('q') }}" placeholder="Référence, modèle, etc.">
@@ -811,12 +818,11 @@
                     @endif
                 </div>
                 @php($sortOptions = [
-                    'latest' => 'Plus récents',
+                    'relevance' => 'Pertinence',
                     'price_asc' => 'Prix croissant',
-                    'price_desc' => 'Prix décroissant',
+                    'price_desc' => 'Prix decroissant',
                 ])
-                @php($currentSortValue = request('sort', 'latest'))
-                @php($currentSortLabel = $sortOptions[$currentSortValue] ?? $sortOptions['latest'])
+                @php($currentSortLabel = $sortOptions[$currentSortValue] ?? $sortOptions['relevance'])
                 <div class="catalog-meta__actions">
                     <button type="button" class="filter-toggle catalog-filter-toggle" data-filter-toggle aria-expanded="false" aria-controls="mobileFilters">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -924,12 +930,14 @@
             </div>
 
             @php($freeShippingMin = (float) (config('pricing.free_shipping_min_total') ?? 0))
+            @php($shippingSurcharge = (float) (config('pricing.shipping_surcharge') ?? 0))
+            @php($allowFreeShipping = $shippingSurcharge <= 0)
             @php($cartService = app(\App\Services\Commerce\CartService::class))
             @php($resolvedCart = $cartService ? $cartService->resolveCart(auth()->user()) : null)
             @php($cartTotal = $resolvedCart?->subtotal_ttc ?? 0)
             @php($progress = $freeShippingMin > 0 ? min(100, max(0, ($cartTotal / $freeShippingMin) * 100)) : 0)
             @php($remaining = $freeShippingMin > 0 ? max(0, $freeShippingMin - $cartTotal) : 0)
-            @if($freeShippingMin > 0)
+            @if($allowFreeShipping && $freeShippingMin > 0)
                 <div class="free-shipping-progress" id="freeShippingBanner" data-free-shipping-min="{{ $freeShippingMin }}" data-cart-total="{{ $cartTotal }}">
                     <div class="free-shipping-text" data-free-text>
                         @if($remaining <= 0)
@@ -1034,7 +1042,7 @@
                 const form = panel?.querySelector('form');
                 if (!form) return;
                 const clearUrl = form.getAttribute('data-clear-url') || window.location.pathname;
-                const sortValue = form.querySelector('input[name="sort"]')?.value || 'latest';
+                const sortValue = form.querySelector('input[name="sort"]')?.value || 'relevance';
                 const target = sortValue ? `${clearUrl}?sort=${encodeURIComponent(sortValue)}` : clearUrl;
                 window.location.assign(target);
             });

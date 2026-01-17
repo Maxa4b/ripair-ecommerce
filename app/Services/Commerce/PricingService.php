@@ -19,14 +19,18 @@ class PricingService
         $discountTotal = $items->sum('discount_total');
         $shippingTotal = $cart->shipping_total ?? 0;
         $originalShippingTotal = $shippingTotal;
+        $shippingSurcharge = (float) (config('pricing.shipping_surcharge') ?? 0);
+
+        $hasForcedShipping = method_exists($cart, 'forcedShippingFee') && $cart->forcedShippingFee() !== null;
+        $shippingDiscountCap = $hasForcedShipping ? 0 : max(0, $shippingTotal - $shippingSurcharge);
 
         if ($cart->promoCode) {
-            $promoDiscount = $this->calculatePromoDiscount($cart, $subtotalTtc, $shippingTotal);
+            $promoDiscount = $this->calculatePromoDiscount($cart, $subtotalTtc, $shippingDiscountCap);
             $discountTotal += $promoDiscount;
 
             // Si le code concerne la livraison, on annule le montant de livraison
-            if ($cart->promoCode->discount_type === 'shipping') {
-                $shippingTotal = 0;
+            if ($cart->promoCode->discount_type === 'shipping' && ! $hasForcedShipping) {
+                $shippingTotal = max($shippingSurcharge, 0);
             }
         }
 

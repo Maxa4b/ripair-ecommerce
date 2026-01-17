@@ -123,13 +123,21 @@ class CheckoutService
 
             $shippingOption = $this->shipping->findOption($payload['shipping_method']);
             $shippingBasePrice = (float) Arr::get(is_array($shippingOption->metadata ?? null) ? $shippingOption->metadata : [], 'price_original', (float) ($shippingOption->price ?? 0));
+            $forcedShipping = $cart->forcedShippingFee();
             $freeShippingMin = (float) (config('pricing.free_shipping_min_total') ?? 0);
+            $shippingSurcharge = (float) (config('pricing.shipping_surcharge') ?? 0);
             // Eligibilité calculée sur le panier avant remise
             $eligibleBase = max(0, ($cart->subtotal_ttc ?? 0));
             $hasShippingPromo = $cart->promoCode && $cart->promoCode->discount_type === 'shipping';
-            $isFreeShippingApplied = $hasShippingPromo || ($freeShippingMin > 0 && $eligibleBase >= $freeShippingMin);
+            $isFreeShippingApplied = ! $forcedShipping
+                && $shippingSurcharge <= 0
+                && ($hasShippingPromo || ($freeShippingMin > 0 && $eligibleBase >= $freeShippingMin));
             if ($isFreeShippingApplied) {
                 $shippingOption->price = 0;
+            }
+            if ($forcedShipping) {
+                $shippingOption->price = (float) $forcedShipping + $shippingSurcharge;
+                $shippingBasePrice = (float) $forcedShipping + $shippingSurcharge;
             }
             $cart->update(['shipping_total' => $shippingOption->price]);
             $totals = $this->pricing->calculateCartTotals($cart->fresh('items', 'promoCode'));

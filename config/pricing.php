@@ -41,4 +41,7 @@ return [
 
     // Frais minimum appliqué si total < seuil gratuit (ex: coût outbound)
     'small_order_shipping_fee' => 7.25,
+
+    // Surcoût fixe appliqué à chaque option de livraison (ex: frais fournisseur)
+    'shipping_surcharge' => 7.95,
 ];

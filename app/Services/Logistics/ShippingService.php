@@ -17,10 +17,12 @@ class ShippingService
         $total = $cart->subtotal_ttc;
         $boxtalOptions = collect();
         $freeShippingMin = (float) (config('pricing.free_shipping_min_total') ?? 0);
+        $shippingSurcharge = (float) (config('pricing.shipping_surcharge') ?? 0);
         // Eligibilité calculée sur le panier avant remise pour ne pas annuler la livraison offerte
         $eligibleBase = max(0, ($cart->subtotal_ttc ?? 0));
         $hasShippingPromo = $cart->promoCode && $cart->promoCode->discount_type === 'shipping';
-        $isFreeShipping = $hasShippingPromo || ($freeShippingMin > 0 && $eligibleBase >= $freeShippingMin);
+        $isFreeShipping = $shippingSurcharge <= 0
+            && ($hasShippingPromo || ($freeShippingMin > 0 && $eligibleBase >= $freeShippingMin));
         $toAddress = [
             'country' => data_get($address, 'country_code'),
             'zip' => data_get($address, 'postal_code'),
@@ -77,6 +79,7 @@ class ShippingService
                 'type' => (string) ($toAddress['type'] ?? ''),
             ],
             'free_shipping' => $isFreeShipping ? 1 : 0,
+            'shipping_surcharge' => $shippingSurcharge,
             'content_code' => (string) $contentCode,
         ]));
 
@@ -96,21 +99,28 @@ class ShippingService
                         'type' => $quote['type'] ?? 'shipping',
                         'origin' => 'boxtal',
                     ]);
-                });
-            if ($isFreeShipping) {
-                $boxtalOptions = $boxtalOptions->map(function ($quote) {
+                })
+                ->map(function ($quote) use ($isFreeShipping, $shippingSurcharge) {
                     $name = $quote['name'] ?? ($quote['service'] ?? 'Livraison');
-                    $label = str_contains(strtolower($name), 'offerte') ? $name : $name.' (offerte)';
-                    $original = (float) ($quote['price_original'] ?? $quote['price'] ?? 0);
+                    $basePrice = (float) ($quote['price'] ?? 0);
+                    $baseOriginal = (float) ($quote['price_original'] ?? $basePrice);
+                    $isFree = false;
+
+                    if ($isFreeShipping) {
+                        $basePrice = 0.0;
+                        $isFree = $shippingSurcharge <= 0 && $baseOriginal > 0;
+                        if ($isFree) {
+                            $name = str_contains(strtolower($name), 'offerte') ? $name : $name.' (offerte)';
+                        }
+                    }
 
                     return array_merge($quote, [
-                        'name' => $label,
-                        'price' => 0.0,
-                        'price_original' => $original,
-                        'is_free' => $original > 0,
+                        'name' => $name,
+                        'price' => round($basePrice + $shippingSurcharge, 2),
+                        'price_original' => round($baseOriginal + $shippingSurcharge, 2),
+                        'is_free' => $isFree,
                     ]);
                 });
-            }
 	            if ($boxtalOptions->isNotEmpty()) {
 	                session()->put('boxtal_quotes', $boxtalOptions->keyBy('method_id')->toArray());
 	                session()->put('boxtal_quotes_key', $cacheKey);
@@ -227,17 +237,26 @@ class ShippingService
     {
         $freeShippingMin = config('pricing.free_shipping_min_total', 0);
         $smallOrderFee = config('pricing.small_order_shipping_fee', 0);
+        $shippingSurcharge = (float) (config('pricing.shipping_surcharge') ?? 0);
         // Eligibilité calculée sur le panier avant remise pour ne pas annuler la livraison offerte
         $eligibleBase = max(0, ($cart->subtotal_ttc ?? 0));
         $hasShippingPromo = $cart->promoCode && $cart->promoCode->discount_type === 'shipping';
-        $price = ($forceFree || $hasShippingPromo || ($freeShippingMin > 0 && $eligibleBase >= $freeShippingMin)) ? 0 : $smallOrderFee;
+        $allowFree = $shippingSurcharge <= 0;
+        $basePrice = ($allowFree && ($forceFree || $hasShippingPromo || ($freeShippingMin > 0 && $eligibleBase >= $freeShippingMin)))
+            ? 0
+            : $smallOrderFee;
+        $baseOriginal = (float) $smallOrderFee;
+        $isFree = $allowFree && $basePrice <= 0 && $baseOriginal > 0;
+        $name = $isFree ? 'Livraison standard (offerte)' : 'Livraison standard';
+        $price = round(((float) $basePrice) + $shippingSurcharge, 2);
+        $priceOriginal = round($baseOriginal + $shippingSurcharge, 2);
 
         return [
             'method_id' => 'manual:standard',
-            'name' => $price <= 0 ? 'Livraison standard (offerte)' : 'Livraison standard',
-            'price' => round((float) $price, 2),
-            'price_original' => round((float) $smallOrderFee, 2),
-            'is_free' => ($price <= 0 && (float) $smallOrderFee > 0),
+            'name' => $name,
+            'price' => $price,
+            'price_original' => $priceOriginal,
+            'is_free' => $isFree,
             'delay' => '2 - 4 jours ouvrés',
             'type' => 'shipping',
             'origin' => 'fallback',
