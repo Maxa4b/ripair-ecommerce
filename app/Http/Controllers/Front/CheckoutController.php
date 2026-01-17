@@ -59,11 +59,14 @@ class CheckoutController extends Controller
         }
         $cart->update(['metadata' => $metadata]);
 
+        $forcedShipping = $cart->forcedShippingFee();
+
         return view('front.checkout.index', [
             'cart' => $cart,
             // Les options Boxtal sont chargées en AJAX (UI non bloquante).
             'shippingOptions' => collect(),
             'checkoutData' => $checkoutData,
+            'forcedShipping' => $forcedShipping,
         ]);
     }
 
@@ -310,14 +313,34 @@ public function paypalCancel()
         $checkoutData = session('checkout', []);
 
         $cart = $this->cartService->resolveCart($request->user())->loadMissing(['items', 'promoCode']);
+        $forcedShipping = $cart->forcedShippingFee();
         $freeShippingMin = (float) (config('pricing.free_shipping_min_total') ?? 0);
+        $shippingSurcharge = (float) (config('pricing.shipping_surcharge') ?? 0);
         $eligibleBase = max(0, (float) ($cart->subtotal_ttc ?? 0));
         $hasShippingPromo = $cart->promoCode && $cart->promoCode->discount_type === 'shipping';
-        $isFreeShipping = $hasShippingPromo || ($freeShippingMin > 0 && $eligibleBase >= $freeShippingMin);
+        $isFreeShipping = $shippingSurcharge <= 0
+            && ! $forcedShipping
+            && ($hasShippingPromo || ($freeShippingMin > 0 && $eligibleBase >= $freeShippingMin));
 
         // Checkout : options fixes (sans appel à l'API Boxtal). L'intégration Boxtal est conservée
         // et sera réutilisée ailleurs, mais on déconnecte cette page du réseau externe.
-        $shippingOptions = collect([
+        if ($forcedShipping) {
+            $shippingOptions = collect([
+                [
+                    'method_id' => 'manual:picofly_delivery',
+                    'name' => 'Livraison Picofly',
+                    'price' => round((float) $forcedShipping + $shippingSurcharge, 2),
+                    'price_original' => round((float) $forcedShipping + $shippingSurcharge, 2),
+                    'delay' => null,
+                    'type' => 'shipping',
+                    'origin' => 'forced_picofly',
+                    'provider' => 'manual',
+                    'operator' => 'RIPAIR',
+                    'is_free' => false,
+                ],
+            ]);
+        } else {
+            $shippingOptions = collect([
             [
                 'method_id' => 'manual:colissimo_home_no_sig',
                 'name' => 'La Poste Colissimo Domicile - Sans Signature',
@@ -358,9 +381,10 @@ public function paypalCancel()
                 'provider' => 'manual',
                 'operator' => 'MONR',
             ],
-        ])->map(function ($opt) use ($isFreeShipping) {
+        ])->map(function ($opt) use ($isFreeShipping, $shippingSurcharge) {
             $base = (float) ($opt['price'] ?? 0);
-            $opt['price_original'] = $base;
+            $opt['price_original'] = round($base + $shippingSurcharge, 2);
+            $opt['price'] = round($base + $shippingSurcharge, 2);
             $opt['is_free'] = ($isFreeShipping && $base > 0);
             if ($isFreeShipping && $base > 0) {
                 $name = (string) ($opt['name'] ?? 'Livraison');
@@ -369,9 +393,10 @@ public function paypalCancel()
             }
             return $opt;
         });
+        }
 
         session()->put('boxtal_quotes', $shippingOptions->keyBy('method_id')->toArray());
-        session()->put('boxtal_quotes_key', 'static_checkout');
+        session()->put('boxtal_quotes_key', $forcedShipping ? 'forced_picofly' : 'static_checkout');
         session()->put('boxtal_quotes_cached_at', time());
 
         $selectedShippingId = data_get($checkoutData, 'shipping.shipping_method') ?? $shippingOptions->first()['method_id'];
