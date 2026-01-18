@@ -219,7 +219,7 @@
                     <a href="{{ route('home') }}">Accueil</a>
                     <a href="{{ route('catalog.index') }}">Catalogue</a>
                     <a href="{{ route('cart.show') }}">Panier</a>
-                    <a href="https://ripair.shop">Nos services</a>
+                    <a href="https://ripair.shop" class="nav-cta">Nos services</a>
                     {{-- <a href="{{ route('pro.apply') }}">Espace PRO</a> --}}
                 </nav>
 
@@ -254,7 +254,7 @@
                     <a href="{{ route('catalog.index') }}">Catalogue</a>
                     {{-- <a href="{{ route('pro.apply') }}">Espace PRO</a> --}}
                     <a href="{{ route('cart.show') }}">Panier</a>
-                    <a href="https://ripair.shop">Nos services</a>
+                    <a href="https://ripair.shop" class="nav-cta">Nos services</a>
                     @auth
                         <a href="{{ route('account.dashboard') }}">Mon compte</a>
                         <form method="POST" action="{{ route('logout') }}">

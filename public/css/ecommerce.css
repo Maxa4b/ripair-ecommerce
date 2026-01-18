@@ -279,6 +279,9 @@ textarea.catalog-input {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
   gap: 0.5rem 1rem;
+  max-height: 240px;
+  overflow-y: auto;
+  padding-right: 6px;
 }
 
 .problem-list label {
@@ -1961,6 +1964,28 @@ nav[aria-label="Pagination Navigation"] .pagination-current {
   box-shadow: 0 8px 18px rgba(15,23,42,0.06);
 }
 .btn-nav--ghost:hover { transform: translateY(-1px); }
+.navbar-links .nav-cta {
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: #3abafc;
+  color: #fff;
+  font-weight: 700;
+  box-shadow: 0 10px 22px rgba(58, 186, 252, 0.25);
+}
+.navbar-links .nav-cta::after { display: none; }
+.navbar-links .nav-cta:hover { color: #fff; filter: brightness(0.95); }
+.mobile-menu .nav-cta {
+  padding: 10px 14px;
+  border-radius: 999px;
+  background: #3abafc;
+  color: #fff;
+  font-weight: 700;
+  box-shadow: 0 10px 22px rgba(58, 186, 252, 0.25);
+  border: none;
+  justify-content: center;
+}
+.mobile-menu .nav-cta::after { display: none; }
+.mobile-menu .nav-cta:hover { color: #fff; transform: none; }
 .nav-cart {
   position: relative;
   display: inline-flex;
