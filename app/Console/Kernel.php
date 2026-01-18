@@ -17,7 +17,9 @@ class Kernel extends ConsoleKernel
 
     protected function schedule(Schedule $schedule): void
     {
-        // Planifier ici si besoin.
+        $schedule->command('supplier:stock-sync')
+            ->cron('0 0,10,12,14,16,18 * * *')
+            ->withoutOverlapping();
     }
 
     protected function commands(): void
